@@ -51,7 +51,6 @@ class TweetSpamPredictor:
         # Variables
         OPEN_CANDIDATE = [
             'entities',
-            'extended_entities',
             'metadata',
             'user'
         ]
@@ -64,7 +63,6 @@ class TweetSpamPredictor:
             'source',
             'lang',
             'quoted_status_id_str',
-            'extended_entities_media',
             'metadata_iso_language_code',
             'metadata_result_type',
             'user_entities',
@@ -92,72 +90,83 @@ class TweetSpamPredictor:
             'user_withheld_in_countries',
             'user_following',
             'user_follow_request_sent',
-            'user_notifications'
+            'user_notifications',
+            'extended_entities'
         ]
-
-        # Auto-make a dataframe
 
         # Saving a local instance
         tweet_df = input_df.copy()
 
-        print(OPEN_CANDIDATE)
+        # print(OPEN_CANDIDATE)
 
         # Opening nested dataframe
         for attr in OPEN_CANDIDATE:
-            print(attr)
+            # print(attr)
             attr_opened = pd.Series(tweet_df.get(attr)).add_prefix(attr+'_')
-            tweet_df = pd.concat([tweet_df, attr_opened], axis=1).drop(attr, axis=1)
+            tweet_df = pd.concat([tweet_df.drop(attr), attr_opened])
+            # print(tweet_df.index)
 
         # Dropping unused attr
-        tweet_df.drop(DROP_CAND, axis=1, inplace=True)
+        # print(tweet_df.index)
+        tweet_df.drop(DROP_CAND, inplace=True)
+
+        # print(tweet_df.index)
 
         # Simple transformations
         print('Simple Transformations')
-        tweet_df['display_text_range'] = [i[1] - i[0] for i in tweet_df['display_text_range']]
-        tweet_df['is_replying_to_others'] = [1.0 if not np.isnan(i) else 0.0 for i in tweet_df['in_reply_to_status_id']]
-        tweet_df['is_quoting_status'] = [1.0 if not np.isnan(i) else 0.0 for i in tweet_df['quoted_status_id']]
-        tweet_df['hashtag_count'] = [len(i) for i in tweet_df['entities_hashtags']]
-        tweet_df['user_mention_count'] = [len(i) for i in tweet_df['entities_user_mentions']]
-        tweet_df['media_count'] = [0 if pd.isnull(i) else len(i) for i in tweet_df['entities_media']]
-        tweet_df['has_symbols'] = [1.0 if i else 0.0 for i in tweet_df['entities_symbols'].astype(bool)]
-        tweet_df['has_url'] = [1.0 if i else 0.0 for i in tweet_df['entities_urls'].astype(bool)]
-        tweet_df['user_is_regular_translator'] = [1.0 if i == 'regular' else 0.0 for i in tweet_df['user_translator_type']]
+        tweet_df['display_text_range'] = tweet_df['display_text_range'][1] - tweet_df['display_text_range'][0]
+        tweet_df['is_replying_to_others'] = 1.0 if not np.isnan(tweet_df['in_reply_to_status_id']) else 0.0
+        tweet_df['is_quoting_status'] = 1.0 if not np.isnan(tweet_df['quoted_status_id']) else 0.0
+        tweet_df['hashtag_count'] = len(tweet_df['entities_hashtags'])
+        tweet_df['user_mention_count'] = len(tweet_df['entities_user_mentions'])
+        tweet_df['media_count'] = 0 if 'entities_media' not in tweet_df.index else 0 if \
+            pd.isnull(tweet_df['entities_media']) else len(tweet_df['entities_media'])
+        tweet_df['has_symbols'] = 1.0 if bool(tweet_df['entities_symbols']) else 0.0
+        tweet_df['has_url'] = 1.0 if bool(tweet_df['entities_urls']) else 0.0
+        tweet_df['user_is_regular_translator'] = 1.0 if tweet_df['user_translator_type'] == 'regular' else 0.0
 
         # Drop previous attr
         print('Dropping attributes')
-        tweet_df.drop(['display_text_range', 'in_reply_to_status_id', 'quoted_status_id', 'entities_hashtags', 'entities_user_mentions', 'entities_media', 'entities_symbols', 'entities_urls', 'quoted_status', 'favorited', 'retweeted', 'user_protected', 'user_contributors_enabled', 'user_is_translator', 'user_translator_type'], axis=1, inplace=True)
+        tweet_df.drop(['display_text_range', 'in_reply_to_status_id', 'quoted_status_id', 'entities_hashtags',
+                       'entities_user_mentions', 'entities_symbols', 'entities_urls', 'quoted_status',
+                       'favorited', 'retweeted', 'user_protected', 'user_contributors_enabled', 'user_is_translator',
+                       'user_translator_type'], inplace=True)
+        if 'entities_media' in tweet_df.index:
+            tweet_df.drop('entities_media')
 
         print('Doing several more calculations')
-        tweet_df['user_profile_background_color_r'] = np.array([list(int(i[j:j+2], 16) for j in (0, 2, 4)) for i in tweet_df['user_profile_background_color']])[:, 0]
-        tweet_df['user_profile_background_color_g'] = np.array([list(int(i[j:j+2], 16) for j in (0, 2, 4)) for i in tweet_df['user_profile_background_color']])[:, 1]
-        tweet_df['user_profile_background_color_b'] = np.array([list(int(i[j:j+2], 16) for j in (0, 2, 4)) for i in tweet_df['user_profile_background_color']])[:, 2]
-        tweet_df['user_profile_link_color_r'] = np.array([list(int(i[j:j+2], 16) for j in (0, 2, 4)) for i in tweet_df['user_profile_link_color']])[:, 0]
-        tweet_df['user_profile_link_color_g'] = np.array([list(int(i[j:j+2], 16) for j in (0, 2, 4)) for i in tweet_df['user_profile_link_color']])[:, 1]
-        tweet_df['user_profile_link_color_b'] = np.array([list(int(i[j:j+2], 16) for j in (0, 2, 4)) for i in tweet_df['user_profile_link_color']])[:, 2]
-        tweet_df['user_profile_sidebar_border_color_r'] = np.array([list(int(i[j:j+2], 16) for j in (0, 2, 4)) for i in tweet_df['user_profile_sidebar_border_color']])[:, 0]
-        tweet_df['user_profile_sidebar_border_color_g'] = np.array([list(int(i[j:j+2], 16) for j in (0, 2, 4)) for i in tweet_df['user_profile_sidebar_border_color']])[:, 1]
-        tweet_df['user_profile_sidebar_border_color_b'] = np.array([list(int(i[j:j+2], 16) for j in (0, 2, 4)) for i in tweet_df['user_profile_sidebar_border_color']])[:, 2]
-        tweet_df['user_profile_sidebar_fill_color_r'] = np.array([tuple(int(i[j:j+2], 16) for j in (0, 2, 4)) for i in tweet_df['user_profile_sidebar_fill_color']])[:, 0]
-        tweet_df['user_profile_sidebar_fill_color_g'] = np.array([tuple(int(i[j:j+2], 16) for j in (0, 2, 4)) for i in tweet_df['user_profile_sidebar_fill_color']])[:, 1]
-        tweet_df['user_profile_sidebar_fill_color_b'] = np.array([tuple(int(i[j:j+2], 16) for j in (0, 2, 4)) for i in tweet_df['user_profile_sidebar_fill_color']])[:, 2]
-        tweet_df['user_profile_text_color_r'] = np.array([tuple(int(i[j:j+2], 16) for j in (0, 2, 4)) for i in tweet_df['user_profile_text_color']])[:, 0]
-        tweet_df['user_profile_text_color_g'] = np.array([tuple(int(i[j:j+2], 16) for j in (0, 2, 4)) for i in tweet_df['user_profile_text_color']])[:, 1]
-        tweet_df['user_profile_text_color_b'] = np.array([tuple(int(i[j:j+2], 16) for j in (0, 2, 4)) for i in tweet_df['user_profile_text_color']])[:, 2]
+        tweet_df['user_profile_background_color_r'] = int(tweet_df['user_profile_background_color'][0:2], 16)
+        tweet_df['user_profile_background_color_g'] = int(tweet_df['user_profile_background_color'][2:4], 16)
+        tweet_df['user_profile_background_color_b'] = int(tweet_df['user_profile_background_color'][4:6], 16)
+        tweet_df['user_profile_link_color_r'] = int(tweet_df['user_profile_link_color'][0:2], 16)
+        tweet_df['user_profile_link_color_g'] = int(tweet_df['user_profile_link_color'][2:4], 16)
+        tweet_df['user_profile_link_color_b'] = int(tweet_df['user_profile_link_color'][4:6], 16)
+        tweet_df['user_profile_sidebar_border_color_r'] = int(tweet_df['user_profile_sidebar_border_color'][0:2], 16)
+        tweet_df['user_profile_sidebar_border_color_g'] = int(tweet_df['user_profile_sidebar_border_color'][2:4], 16)
+        tweet_df['user_profile_sidebar_border_color_b'] = int(tweet_df['user_profile_sidebar_border_color'][4:6], 16)
+        tweet_df['user_profile_sidebar_fill_color_r'] = int(tweet_df['user_profile_sidebar_fill_color'][0:2], 16)
+        tweet_df['user_profile_sidebar_fill_color_g'] = int(tweet_df['user_profile_sidebar_fill_color'][2:4], 16)
+        tweet_df['user_profile_sidebar_fill_color_b'] = int(tweet_df['user_profile_sidebar_fill_color'][4:6], 16)
+        tweet_df['user_profile_text_color_r'] = int(tweet_df['user_profile_text_color'][0:2], 16)
+        tweet_df['user_profile_text_color_g'] = int(tweet_df['user_profile_text_color'][2:4], 16)
+        tweet_df['user_profile_text_color_b'] = int(tweet_df['user_profile_text_color'][4:6], 16)
 
         print('Getting vecs')
-        vec = tweet_df['inferred_text'].apply(self.preprocess_text)
+        vec = self.preprocess_text(tweet_df['inferred_text'])
 
         print('Dropping columns again')
         tweet_df.drop(['user_profile_background_color', 'user_profile_link_color', 'user_profile_sidebar_border_color',
-                       'user_profile_sidebar_fill_color', 'user_profile_text_color'], axis=1, inplace=True)
+                       'user_profile_sidebar_fill_color', 'user_profile_text_color'], inplace=True)
 
         # tweets = tweet_df[['is-spam', 'inferred_text']].rename({'inferred_text': 'raw_text'}, axis=1)
 
         tweet_df.drop(['inferred_text', 'user_name', 'user_location', 'user_description', 'user_created_at',
-                       'possibly_sensitive'], axis=1, inplace=True)
+                       'possibly_sensitive'], inplace=True)
 
         print('Concatenating...')
-        tweet_df = pd.concat([tweet_df, vec], axis=1)
+        tweet_df = pd.concat([tweet_df, vec])
+
+        print(tweet_df)
 
         return self.model.predict(tweet_df)
 
